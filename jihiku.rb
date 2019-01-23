@@ -45,9 +45,20 @@ def getWebsiteResponse(url)
 
 end
 
-def openResult(page)
-
-entries = page.xpath("//dt[@class='title search-ttl-a']")
+def openResult(page, word)
+	entries = page.xpath("//a")  #("//dt[@class='title search-ttl-a']")
+	urlSnippit = "/" + word + "/"
+	url = ""
+	entries.each do |entry| {
+		html = entry["href"]
+		if html.include? urlSnippit
+			url = html
+		end
+		
+	}
+	
+	response = getWebsiteResponse(html)
+	return Nokogiri::HTML(response)
 
 
 
