@@ -1,9 +1,7 @@
-read in file
 
-make list of words, delete duplicates
-if null go to reading
 
-Word, word[reading], meaning(english), example sentance, example sentace[reading]
+	
+Word, word[reading], meaning(Japanese), example sentance, example sentace[reading]
 
 
 def getWebsiteResponse(url) 
@@ -64,29 +62,16 @@ def openResult(page, word)
 
 end
 
-wordlist = []
+wordlist = {}
 
-File.readlines('input.txt').each do |line| {
+wordlist = {}
+
+for line in input 
 	
-	line.sub!(' ]', '#$#')
-	line.sub!(']: ', '#$#')
-	list = line.split("#$#")
+end
 	
-	if (list.length != 3) 
-		puts "List length is not 3"
-		puts list
-	end
-	
-	word = list[0]
-
-	if word == "null"
-		word = list[1]
-		list[0] = list[1]
-	end
-		
-
-	wordlist.push(list)
-
+File.readlines('input.txt').each do |line| {	
+	wordlist[line.strip()] = [null, null, null, null, null]
 }
 
 wordlist = wordlist.uniq
