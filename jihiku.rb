@@ -91,7 +91,26 @@ wordlist.each do |item| {
 		page = openResult(page)
 	end
 	
+	definitions = []
+	
+	i = 1
+	while true
+		#page.css("h2")
+		xpath = "(//P[@class='text'])[" + i.to_s + "]"
+		xpath_reibun = "//DIV[@class='text']"
+		entry = page.xpath(xpath)
+		if entry[0...2] == "･･･"
+			entry = page.xpath(xpath_reibun)
+		end
+		entry = entry.tr("」","").split("「")
 
+		definition = entry[0]
+		sentences = entry.drop(1)
+		sentance = sentences[0] #pickBestSentance(sentences, null)
+		sentance_alt = #pickBestSentance(sentences, sentance)
+		
+		i += 1
+	end
 
 
 
