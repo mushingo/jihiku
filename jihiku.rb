@@ -5,12 +5,22 @@ require "uri"
 	
 #Word, word[reading], meaning(Japanese), example sentance, example sentace[reading]
 
+CONTENTS = "contents-wrap"
+SECTION = "section"
+CONTENTS_HEADING_CSS = ".contents-wrap-b-in .basic_title h2"
+SECTION_HEADING_CSS = 	".section .basic_title.nolink.jn h1"
+CONTENTS_HEADING_SUB = "の解説"
+SECTION_HEADING_SUB = "の意味"
+CONTENTS_DEFINITION_CSS = ".contents-wrap-b-in .meaning_area"
+SECTION_DEFINITION_CSS = ".section .contents_area"
+
+
+
 
 
 def openPage(url)
-	url = URI.parse(URI.encode(url))
+	url = URI.parse(url)
 	request = Net::HTTP::Get.new(url.path)
-
 
 	request['User-Agent'] = "Firefox"
 
@@ -18,12 +28,18 @@ def openPage(url)
 	response = Net::HTTP.start(url.host, url.port,:use_ssl => url.scheme == 'https') do |http|
 		http.request(request)
 	end
-
+	
 	if response.code == "301"
 		new_url = response.header['location']
 		new_url = "https://dictionary.goo.ne.jp" + new_url
 		return openPage(new_url)
 	end
+
+	if response.code != "200"
+		puts response.code
+		exit
+	end
+	
 	return response.body
 end
 
@@ -72,6 +88,78 @@ def makeSentences(sentences, word, reading)
 end
 
 
+def processKokugo(page, expression)
+#	description = page.xpath('/html/head/meta[@name="description"]/@content').to_s
+#	puts description
+#	puts
+	definitions = Array.new
+	if page.at_css(".contents-wrap-b-in")
+		signal = CONTENTS
+		heading_css = CONTENTS_HEADING_CSS
+		heading_sub = CONTENTS_HEADING_SUB
+		definition_css = CONTENTS_DEFINITION_CSS
+	else
+		heading_css = SECTION_HEADING_CSS
+		signal = SECTION
+		heading_sub = SECTION_HEADING_SUB
+		definition_css = SECTION_DEFINITION_CSS
+	end
+	single_css = " .contents .text"
+	multiple_css = " .contents .meaning"
+
+	puts signal
+	heading = page.css(heading_css).text
+	heading = heading.gsub(heading_sub, "").strip
+
+	if page.at_css(definition_css + multiple_css)
+
+		items = page.css(definition_css + " .contents li")
+		items.each do |item|
+			definitions.push(item.css("p").text)
+		end
+	else
+		puts definition_css + single_css
+		
+		definitions.push(page.css(definition_css + single_css).text)
+	end
+
+	hinshi = page.css(".hinshi").text
+
+	definitions.each do |definition|
+
+		puts "last: " + definition[-1]
+
+		definition =  definition.gsub(hinshi, "")
+
+		sentence = ""
+
+		if definition[-1].include? "」"
+			definition, sentence = definition.split("「")
+			sentence = sentence.gsub("」", "")
+		end
+	
+		if heading.include? "【"
+			reading, kanji = heading.split("【")
+			kanji = kanji.gsub("】", "")
+		else
+			kanji = ""
+			reading = ""
+		end
+	
+#check its not english
+	
+		puts "Expression: " + expression
+		puts "Reading: " + reading
+		puts "Kanji: " + kanji
+		puts "Hinshi: " + hinshi
+		puts "Definition: " + definition
+		puts "Sentence: " + sentence
+		puts
+	end
+
+	return 
+end
+
 
 wordlist = {}
 
@@ -87,51 +175,70 @@ wordlist2 = {}
 
 wordlist.each do |item,key| 
 	word = item
+	puts "word: " + word
 	i = i + 1
 	url_front = "https://dictionary.goo.ne.jp/srch/jn/".force_encoding("UTF-8") 
 	url_end = "/m0u/".force_encoding("UTF-8")
 	url = url_front + word + url_end
-
-	response = openPage(url)
+	response = openPage(URI.encode(url))
 
 	page = Nokogiri::HTML(response)
 
 	title = page.css('title').text
 
-	if page.css('title').text.include? "検索結果"
+
+	if title.include? "検索結果"
 		page = openResult(page, word)
 		if page == nil 
+			puts "result is nil"
+			puts
 			missing.push(word)
 			next
 		end
 	end
-	puts page.css("title").text
+	title = page.css('title').text
+	puts "Page Title: " + title
 
-	if page.css('title').text.include? "英語で訳す"
-		missing.push(word)
+	if title.include? "英語で訳す"
+		puts "english translation result"
+		puts
+		missing.push(word)#Search elsewhere?
 		next
 	end
 			     
-	if page.css('title').text.include? "404"
-		missing.push(word)
+	if title.include? "404"
+		puts "result is 404"
+		missing.push(word)#
 		next
 	end
-		
-	#Split up into cases jap dict, yojijukugo, eigo etc
-	#
-	definitions_list = page.css(".contents_area .contents .text")
-	reading = page.css(".section .basic_title h1").text
-	reading = reading.gsub("の意味", "")
 
-	reading = reading.gsub("】","")
-	reading_kanji = reading.split("【")
-	kanji = ""
-	if reading_kanji.size > 1
-		kanji = reading_kanji[1]#if more than 1?
+	if title.include? "goo国語辞書"
+		puts "goo国語辞書 result"
+		processKokugo(page, word)
 	end
-	reading = reading_kanji[0]
-	puts word, reading
 
+	if title.include? "四字熟語"
+		puts "四字熟語 result"
+		next
+		processYoji(page)
+	end
+
+
+
+		
+	
+#	definitions_list = page.css(".contents_area .contents .text")
+#	reading = page.css(".contents-wrap-b-in .basic_title h2").text
+	next
+#	reading = reading.gsub("】 の解説", "")
+#	reading, kanji, extra = reading.split("【")
+#	kanji = ""
+#	if reading_kanji.size > 1
+#		kanji = reading_kanji[1]#if more than 1?
+#	end
+#	reading = reading_kanji[0].strip
+#	puts reading
+exit
 	reading = reading.gsub("〕", "")
 	reading_alt = reading.split("〔")
 	alternate_reading = ""
