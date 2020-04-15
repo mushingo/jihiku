@@ -19,10 +19,13 @@ SECTION_DEFINITION_CSS = ".section .contents_area"
 
 
 def openPage(url)
+
 	url = URI.parse(url)
 	request = Net::HTTP::Get.new(url.path)
 
 	request['User-Agent'] = "Firefox"
+
+	puts url
 
 	
 	response = Net::HTTP.start(url.host, url.port,:use_ssl => url.scheme == 'https') do |http|
@@ -45,22 +48,40 @@ end
 
 
 
-def openResult(page, word)
+def selectMatchingEntries(page, word)
 
-	entry = page.css(".list-search-a li:first-child a").first
+	search_results = page.css(".content_list a").map { |anchor| anchor["href"] }
+	encoded_word = URI.encode("/" + word + "/")
+	puts encoded_word
+	found = false
+
+	entries = []
+
+	search_results.each do |result_url|
+		if ["thsrs", "wpedia", "person", "srch"].any? { |skip| result_url.include? skip }
+			next
+		end
+		if result_url.include?encoded_word
+			puts result_url
+			entries.push("https://dictionary.goo.ne.jp" + result_url)
+			found = true
+		end
+	end
+
+	if found == true
+		return entries
+	end
+
+	#if not found select first entry
+
+	result = page.css(".content_list li:first-child a").first
 
 	
-	if entry == nil
-		return nil
+	if result == nil
+		return []
 	end
 		
-	entry = entry['href']
-
-	url =  "https://dictionary.goo.ne.jp" + entry
-	response = openPage(url)
-	return Nokogiri::HTML(response)
-
-
+	return entries.push("https://dictionary.goo.ne.jp" + result['href'])
 
 
 end
@@ -107,9 +128,11 @@ def processKokugo(page, expression)
 	single_css = " .contents .text"
 	multiple_css = " .contents .meaning"
 
-	puts signal
+#	puts signal
 	heading = page.css(heading_css).text
 	heading = heading.gsub(heading_sub, "").strip
+
+#	puts puts "heading: " + heading
 
 	if page.at_css(definition_css + multiple_css)
 
@@ -118,16 +141,20 @@ def processKokugo(page, expression)
 			definitions.push(item.css("p").text)
 		end
 	else
-		puts definition_css + single_css
+	
 		
 		definitions.push(page.css(definition_css + single_css).text)
 	end
+
+	
 
 	hinshi = page.css(".hinshi").text
 
 	definitions.each do |definition|
 
-		puts "last: " + definition[-1]
+		
+
+#		puts "last: " + definition[-1]
 
 		definition =  definition.gsub(hinshi, "")
 
@@ -161,6 +188,10 @@ def processKokugo(page, expression)
 end
 
 
+
+
+
+
 wordlist = {}
 
 
@@ -175,9 +206,10 @@ wordlist2 = {}
 
 wordlist.each do |item,key| 
 	word = item
+	puts
 	puts "word: " + word
 	i = i + 1
-	url_front = "https://dictionary.goo.ne.jp/srch/jn/".force_encoding("UTF-8") 
+	url_front = "https://dictionary.goo.ne.jp/srch/all/".force_encoding("UTF-8") 
 	url_end = "/m0u/".force_encoding("UTF-8")
 	url = url_front + word + url_end
 	response = openPage(URI.encode(url))
@@ -187,40 +219,50 @@ wordlist.each do |item,key|
 	title = page.css('title').text
 
 
-	if title.include? "検索結果"
-		page = openResult(page, word)
-		if page == nil 
-			puts "result is nil"
+	if title.include? "で始まる言葉"
+		results = selectMatchingEntries(page, word)
+		if results.length == 0
+			puts "No results"
 			puts
 			missing.push(word)
 			next
 		end
 	end
-	title = page.css('title').text
-	puts "Page Title: " + title
 
-	if title.include? "英語で訳す"
-		puts "english translation result"
-		puts
-		missing.push(word)#Search elsewhere?
-		next
-	end
+	puts results
+	results.size = results_number
+
+	results.each do |result| 
+		response = openPage(result)
+		page = Nokogiri::HTML(response)
+
+		title = page.css('title').text
+
+		puts "Page Title: " + title
+
+		if title.include? "英語で訳す"
+			puts "english translation result"
+			puts
+			missing.push(word)#Search elsewhere?
+			next
+		end
 			     
-	if title.include? "404"
-		puts "result is 404"
-		missing.push(word)#
-		next
-	end
+		if title.include? "404"
+			puts "result is 404"
+			missing.push(word)#
+			next
+		end
 
-	if title.include? "goo国語辞書"
-		puts "goo国語辞書 result"
-		processKokugo(page, word)
-	end
+		if title.include? "goo国語辞書"
+			puts "goo国語辞書 result"
+			processKokugo(page, word)
+		end
 
-	if title.include? "四字熟語"
-		puts "四字熟語 result"
-		next
-		processYoji(page)
+		if title.include? "四字熟語"
+			puts "四字熟語 result"
+			next
+			processYoji(page)
+		end
 	end
 
 
